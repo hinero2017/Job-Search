@@ -1,0 +1,415 @@
+**Today's Date:** April 24, 2026  
+**Chat Session Number:** 8e04e57b-1782-4753-a7f7-66b54fc1376e
+
+---
+
+# COMPREHENSIVE N8N + CLAUDE JOB SEARCH AGENT PROMPT
+
+## PRIMARY OBJECTIVE
+
+Create an autonomous **Daily Job Search & Application Agent** that identifies, filters, enriches, and logs post-production job opportunities specifically for **Assistant Editor / Junior Editor / Editor** roles. The agent must search across 13+ job platforms, apply strict location and technology filters, generate personalized outreach materials, and maintain a comprehensive searchable Excel database organized by sweep date with clickable job URLs.
+
+---
+
+## CORE BUSINESS CONTEXT
+
+**User Profile:**
+- Senior Assistant Editor / Junior Editor with 4+ years post-production experience
+- Proficient in: Avid (primary), Premiere Pro, DaVinci Resolve, After Effects
+- Looking for roles in: NYC/Jersey City (on-site/hybrid preferred) OR Remote-only (worldwide)
+- Target companies: Major networks, production studios, streaming platforms, agencies
+
+**Success Metric:** Increase response rate from hiring managers through tailored, data-driven applications with pre-generated personalized cover letters and outreach messages.
+
+---
+
+## JOB SEARCH CRITERIA (STRICT FILTERS)
+
+### Role Criteria (Title Match - ANY of these):
+- "Assistant Editor"
+- "Junior Editor"
+- "Editor" (when combined with other criteria)
+- Related: "Post-Production Editor", "Video Editor", "Media Manager"
+
+### Location Criteria (ANY of these):
+- **NYC-specific:** "New York", "NYC", "New York City", "Manhattan", "Brooklyn", "Queens"
+- **Jersey-specific:** "Jersey City", "New Jersey", "NJ"
+- **Remote:** "Remote", "Work from home", "Telecommute", "Distributed team"
+- **REJECT:** Any role requiring relocation outside NYC/Jersey City unless explicitly "Remote"
+
+### Software Criteria (OPTIONAL - relaxed filter):
+- Ideally mention: "Avid" OR "Premiere Pro" OR "Adobe Premiere"
+- If not mentioned in job description, still accept role IF location + title match (lower priority flag)
+- BONUS: Mention of DaVinci Resolve, After Effects, Avid Media Composer
+
+### Content Type Priorities:
+- Unscripted TV/Film (Documentaries, Reality, Competition shows)
+- Scripted Content (Drama, Comedy series)
+- High-quality digital content
+- Music videos, commercials
+- Educational content
+- AVOID: Low-quality content mills, MLM schemes, pure social media posting
+
+---
+
+## DATA SOURCES & API INTEGRATION
+
+### Primary Sources (Automated API/Web scraping):
+1. **Indeed** - Tech stack: Selenium (JavaScript-heavy site), Fallback: BeautifulSoup with user-agent rotation
+2. **Glassdoor** - Requires Selenium for dynamic content
+3. **LinkedIn** - Selenium with credential handling (if available; currently blocked)
+4. **ZipRecruiter** - BeautifulSoup with job ID parsing
+5. **Google Jobs** - Selenium for SERPs parsing
+6. **Staff Me Up** - Industry-specific platform, BeautifulSoup
+7. **ProductionHUB** - Film/TV industry jobs portal, BeautifulSoup
+8. **Mandy** - Entertainment jobs (UK-based but has US content), BeautifulSoup
+9. **Upwork** - Freelance/contract roles, API available
+10. **Idealist** - Non-profit/mission-driven content, BeautifulSoup
+11. **JobLeads** - Meta job aggregator, BeautifulSoup
+12. **Entertainment Careers** - Industry-specific board, BeautifulSoup
+13. **ShowbizJobs** - Entertainment industry jobs, BeautifulSoup
+
+### API Preference Chain (for each source):
+1. **Check for official REST API** - (ZipRecruiter has limited API; Upwork has full API)
+2. **Evaluate GraphQL endpoints** - (LinkedIn has internal GraphQL)
+3. **Fall back to Web Scraping** - Selenium for JS-heavy sites, BeautifulSoup for static HTML
+4. **Rate-limit handling:** Implement exponential backoff, request throttling (1-2 second delays between requests)
+
+---
+
+## DAILY SWEEP EXECUTION FLOW
+
+### Schedule:
+- **Time:** 9:00 AM daily (configured in cron for automated runs)
+- **Manual override:** Agent can be triggered on-demand via n8n interface
+- **Retry logic:** Failed source attempts should retry after 30 seconds, max 3 attempts
+
+### Per-Source Scraping:
+```
+For each job source:
+  1. Initiate connection (HTTP GET / Selenium browser)
+  2. Pass search parameters:
+     - Keywords: "assistant editor", "junior editor", "editor"
+     - Location: "New York", "NYC", "Jersey City", "Remote"
+     - Date filter: Last 7 days (if available)
+  3. Parse response: Extract job data
+  4. Map to standard schema: [title, company, location, url, date_posted, description]
+  5. On error: Log error, continue to next source
+  6. Collect all jobs in single array
+```
+
+### Data Collection Fields (Per Job):
+- **title** (string) - Job title as posted
+- **company** (string) - Hiring company name
+- **location** (string) - Location as stated in listing
+- **url** (string, CRITICAL) - Direct link to job posting (clickable, full URL)
+- **date_posted** (string) - Posted date if available (format: "X days ago" or "YYYY-MM-DD")
+- **description** (text) - Job description snippet (first 500 chars)
+- **source** (string) - Job board name (Indeed, Glassdoor, etc.)
+
+---
+
+## FILTERING & ENRICHMENT LAYER
+
+### Step 1: Apply Filters
+```
+For each collected job:
+  - Check title against ROLES list → Pass/Fail
+  - Check location against LOCATIONS list → Pass/Fail
+  - Check description for SOFTWARE keywords (Avid, Premiere) → Flag as priority if found
+  
+  Keep job if: (Title match) AND (Location match)
+  Optional boost: Add software match flag for ranking
+```
+
+### Step 2: Generate Personalized Outreach Materials
+
+**A. Short Message (Under 150 characters):**
+```
+Template:
+"Hi [COMPANY], I'm interested in the [TITLE] role. With my editing experience [+ software if known], 
+I'd love to contribute to your projects. Check out my work: [PORTFOLIO_URL or CONTACT_INFO]"
+
+Logic:
+- Extract company name from job listing
+- Insert job title
+- Conditionally add "with Avid/Premiere Pro experience" if software detected
+- Truncate to 150 chars if exceeds limit
+```
+
+**B. Cover Letter (500 characters, semi-personalized):**
+```
+Template:
+"Dear [COMPANY] Hiring Team,
+
+I am excited to apply for the [TITLE] position in [LOCATION]. With my background 
+in post-production editing, including experience with [DETECTED_SOFTWARE or "Avid and Premiere Pro"], 
+I am confident I can contribute effectively to your [CONTENT_TYPE] productions.
+
+[RESUME_SNIPPET from PDF - first 300 chars of relevant experience]
+
+I look forward to discussing how my skills align with your needs.
+
+Best regards,
+[USER_NAME]"
+
+Logic:
+- Extract company, title, location from job data
+- Detect software from job description, insert if found
+- Parse user's resume PDF to extract text snippet
+- Generate personalized cover letter truncated to 500 chars
+```
+
+### Step 3: Resume PDF Extraction
+- Read user's resume PDF (config path: resume.pdf)
+- Extract first 1000 characters of text (PyPDF2 library)
+- Use in cover letter generation for personalization
+- Fallback if PDF unreadable: Default text "Assistant Editor with experience in Avid and Premiere Pro"
+
+---
+
+## EXCEL DATABASE SCHEMA & LOGGING
+
+### Columns (ordered):
+| # | Column Name | Format | Example |
+|---|---|---|---|
+| A | Title | Text | "Assistant Editor, Unscripted" |
+| B | Company | Text | "NBC Universal" |
+| C | Location | Text | "Hybrid work in New York, NY" |
+| D | URL | Hyperlink (CRITICAL) | https://www.indeed.com/rc/clk?jk=abc123... |
+| E | Date Posted | Text | "2 days ago" |
+| F | Source | Text | "Indeed" |
+| G | Sweep Date | Date (DD/MM/YYYY) | "24/04/2026" |
+| H | Status | Text | "New" / "Applied" / "Interview" |
+| I | Short Message | Text (max 150 chars) | "Hi NBC, I'm interested in..." |
+| J | Cover Letter | Text (max 500 chars) | "Dear NBC Hiring Team..." |
+
+### Sweep Organization:
+- **Header Row (Row 1):** Column names (persists across all sweeps)
+- **Separator Row (New sweep):** 
+  ```
+  "--- Sweep: 24/04/2026 ---" | (blank cells) | (blank)
+  ```
+- **Data Rows:** One row per job, all jobs from that sweep below separator
+
+### File Location:
+- Path: Jobs_Agent_AI.xlsx
+- Sheet name: `Jobs_SEARCH`
+- Auto-creation if missing (first run)
+
+---
+
+## EXECUTION WORKFLOW (N8N NODES)
+
+### Node 1: Trigger
+- Type: Cron / Schedule
+- Time: Daily at 09:00 AM
+- Alternative: Manual webhook trigger for testing
+
+### Node 2-14: Parallel Job Scrapers (One per source)
+- Each node runs concurrently (n8n parallel execution)
+- Try-catch error handling, returns empty array on failure
+- Timeout: 30 seconds per source (safety limit)
+
+### Node 15: Merge Results
+- Combine all job arrays from sources 2-14
+- Deduplicate by URL and title+company combo
+- Output: Single array of ~50-100 jobs
+
+### Node 16: Filter Jobs
+- Apply role, location, software filters
+- Output: ~10-20 filtered jobs
+
+### Node 17-19: Enrich (Claude/AI step)
+- For each job:
+  - Generate short message (Claude call 1)
+  - Generate cover letter (Claude call 2, includes resume context)
+- Output: Jobs with enriched fields
+
+### Node 20: Write to Excel
+- Open existing `Jobs_Agent_AI.xlsx`
+- Add separator row with sweep date
+- Append enriched job rows
+- Save file
+- Log: "Logged X jobs on DD/MM/YYYY"
+
+### Node 21: Notify (Optional)
+- Send summary to Slack or email: "Sweep complete: X new jobs found"
+
+---
+
+## ERROR HANDLING & LOGGING
+
+### Retry Logic:
+- **Per-source failures:** Max 3 retries with 30-second backoff
+- **Network timeouts:** 60-second timeout per request
+- **Parse errors:** Skip individual job, continue with rest of source
+
+### Logging:
+```
+Console output format:
+"Starting job search sweep at [TIMESTAMP]"
+"[SOURCE_NAME]: Found X job cards"
+"Collected Y jobs before filtering"
+"Found Z relevant jobs"
+"Logged Z jobs to Excel on DD/MM/YYYY"
+"Error scraping [SOURCE]: [ERROR_MESSAGE]" (if applicable)
+```
+
+### File Logs:
+- Option: Write logs to `logs/sweep_[DATE].log`
+- Track which sources failed, how many jobs collected/filtered per source
+
+---
+
+## CONFIGURATION (ENVIRONMENT VARIABLES / CONFIG FILE)
+
+```python
+# Roles to target
+ROLES = ['Assistant Editor', 'Junior Editor', 'Editor']
+
+# Geographic filters
+LOCATIONS = ['New York', 'NYC', 'Jersey City', 'Remote']
+
+# Software keywords (for prioritization)
+SOFTWARE = ['Avid', 'Premiere Pro', 'Adobe Premiere']
+
+# File paths
+RESUME_PATH = 'data/resume.pdf'
+EXCEL_FILE = 'data/Jobs_Agent_AI.xlsx'
+SHEET_NAME = 'Jobs_SEARCH'
+
+# Scraper URLs (parameterized for each source)
+INDEED_URL = 'https://www.indeed.com/jobs?q=assistant+editor&l=New+York'
+GLASSDOOR_URL = 'https://www.glassdoor.com/Job/new-york-assistant-editor-jobs...'
+# ... (12 more URLs)
+
+# API Keys (if required)
+UPWORK_API_KEY = '[SECRET]'
+LINKEDIN_EMAIL = '[EMAIL]'
+LINKEDIN_PASSWORD = '[PASSWORD]'
+
+# Timing
+SWEEP_TIME = '09:00'  # 9 AM daily
+RETRY_ATTEMPTS = 3
+TIMEOUT_SECONDS = 60
+```
+
+---
+
+## SUCCESS CRITERIA & KPIs
+
+### Immediate (Per sweep):
+✅ All 13 sources queried (at least attempted)  
+✅ 50+ raw jobs collected per sweep  
+✅ 10-20 filtered jobs matching criteria  
+✅ 100% of filtered jobs have clickable URLs  
+✅ 100% of filtered jobs have Source + Sweep Date populated  
+✅ Excel file updated with new separator and jobs within 5 minutes of sweep start  
+
+### Long-term (Over weeks):
+✅ Accumulated 50+ qualified jobs in Excel by week 2  
+✅ Average response rate from applications improves to 5%+ (currently tracking)  
+✅ At least 1 interview scheduled per month from logged jobs  
+✅ Job sources ranked by quality (which sources yield most responses)  
+
+---
+
+## SPECIAL CONSIDERATIONS
+
+### Resume Integration:
+- User provides resume.pdf (assumed to exist)
+- Agent extracts text automatically using PyPDF2
+- Snippet embedded in all cover letters for personalization
+- If PDF missing/unreadable: Use fallback text
+
+### URL Integrity (CRITICAL):
+- **All jobs MUST have valid URLs** in Excel
+- Fallback strategies:
+  1. Direct job link from HTML `href` attribute
+  2. Data attribute parsing (`data-jk` for Indeed)
+  3. Constructed URL from job ID (e.g., `indeed.com/viewjob?jk=XYZ`)
+- **No null URLs allowed** - if extraction fails, skip job or flag as manual review
+
+### Rate Limiting & Ethical Scraping:
+- 1-2 second delay between individual requests
+- Rotate user-agent headers
+- Respect `robots.txt` and site ToS
+- Prioritize official APIs where available
+- Monitor for IP blocks; implement proxy rotation if needed
+
+### Data Privacy:
+- Store credentials securely (env vars, not hardcoded)
+- Resume PDF contains PII - ensure file permissions locked
+- Excel output contains job URLs/company names - non-sensitive
+
+---
+
+## EXAMPLE OUTPUT (First Sweep - Day 1)
+
+```
+Excel File: Jobs_Agent_AI.xlsx
+
+Row 1 (Header): Title | Company | Location | URL | Date Posted | Source | Sweep Date | Status | Short Message | Cover Letter
+Row 2 (Separator): --- Sweep: 24/04/2026 --- | | | | | | | |
+Row 3 (Job): Assistant Lifestyle Editor | Hearst Media Services | Hybrid work in New York | https://indeed.com/rc/clk?jk=5dacae... | 2 days ago | Indeed | 24/04/2026 | New | Hi Hearst, I'm interested in... | Dear Hearst Hiring Team...
+Row 4 (Job): Assistant Photo Editor | Dow Jones | New York, NY | https://indeed.com/viewjob?jk=a35992... | 1 day ago | Indeed | 24/04/2026 | New | Hi Dow Jones, I'm interested in... | Dear Dow Jones Hiring Team...
+Row 5 (Job): Junior Video Editor | NBC Universal | Remote | https://glassdoor.com/job/... | Posted today | Glassdoor | 24/04/2026 | New | Hi NBC, I'm interested in... | Dear NBC Hiring Team...
+... (15+ more jobs)
+```
+
+---
+
+## NEXT SWEEP (Day 2, Example)
+
+```
+Row N (Separator): --- Sweep: 25/04/2026 --- | | | | | | | |
+Row N+1 (Job): [New job from Day 2 sweep]
+... (9+ more new jobs)
+```
+
+---
+
+## MAINTENANCE & ITERATION
+
+### Weekly:
+- Review Excel file for "Applied" status updates
+- Rank sources by job quality (response rate per source)
+- Adjust location/role filters if no relevant jobs found
+
+### Monthly:
+- Analyze which companies/industries respond most
+- Update resume if skills change
+- Review cover letter templates for effectiveness
+
+### As-needed:
+- Add new job sources if discovered
+- Update API endpoints if sites change
+- Modify filters based on market conditions
+
+---
+
+## DELIVERABLE CHECKLIST FOR N8N SETUP
+
+- [ ] All 13 job source connectors functional (API or scraper)
+- [ ] Parallel execution configured (not sequential)
+- [ ] Filter logic implemented (role, location, software)
+- [ ] Claude API integrated for cover letter generation
+- [ ] Resume PDF parser working with fallback
+- [ ] Excel writer with proper schema and formatting
+- [ ] Cron schedule set for 09:00 AM daily
+- [ ] Error logging implemented (retry + alerts)
+- [ ] Separator rows added between sweeps
+- [ ] URL validation: 100% of jobs have clickable URLs
+- [ ] Sweep date column populated (DD/MM/YYYY format)
+- [ ] Source column populated for all jobs
+- [ ] Short message under 150 chars for all jobs
+- [ ] Cover letter 500 chars for all jobs
+- [ ] Test run successful with 5+ jobs logged
+- [ ] Documentation updated
+
+---
+
+## SUMMARY
+
+This n8n + Claude agent automates the entire job search → application workflow for post-production professionals, ensuring daily discovery of relevant opportunities across 13 platforms, intelligent filtering, personalized outreach material generation, and centralized Excel tracking. Success is measured by volume of qualified leads, URL accuracy, and ultimately response rate from hiring teams.You've used 73% of your session rate limit. Your session rate limit will reset on April 24 at 1:23 PM. [Learn More](https://aka.ms/github-copilot-rate-limit-error)
