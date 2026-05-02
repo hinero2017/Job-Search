@@ -1,0 +1,56 @@
+Here's a clear technical note you can share with Gemini:
+
+---
+
+## Problem: Auto-Saving Job Search Results to Google Sheets
+
+### What I'm Building
+A React artifact (running inside Claude.ai) that:
+1. Calls the Anthropic API with web search to find post production jobs
+2. Parses the results into structured JSON
+3. **Automatically appends those rows to a Google Sheet** — no manual copy/paste
+
+---
+
+### The Sheet
+**Sheet ID:** `13Ksbwytgyk_BjCnFwNGmu74ZrWOceDqLeakKoYw9sAQ`
+
+**Columns:** Title | Company | Location | URL | Date | Posted | Source | Sweep Date | Status | Short Message | Cover Letter
+
+---
+
+### The Core Problem
+The React artifact runs in a sandboxed browser environment inside Claude.ai. It **cannot directly call the Google Sheets API** because:
+
+1. **No API key available** — The artifact has no access to a Google OAuth token or service account credentials. Calling `https://sheets.googleapis.com/v4/spreadsheets/{id}/values:append` requires a valid Bearer token.
+
+2. **CORS restrictions** — The sandbox blocks direct calls to external APIs like Google Sheets from inside the artifact's JavaScript.
+
+3. **No backend** — There is no server, no Node.js environment, no middleware. It's pure client-side React. There's nowhere to securely store or use credentials.
+
+4. **The Google Drive MCP is connected** — Claude.ai has a Google Drive MCP server at `https://drivemcp.googleapis.com/mcp/v1` that Claude itself can use to read Drive files. However, when this MCP is called from *inside an artifact* via the Anthropic API (`mcp_servers` parameter), it appears to **not have write/append access to Sheets** — only read access to Drive files. Attempts to append rows resulted in no data being written.
+
+---
+
+### What I Need From Gemini
+A solution that allows the React artifact to append rows to Google Sheets **automatically and without user interaction**, ideally:
+
+- A simple **Google Apps Script Web App** deployed from the sheet itself that accepts a POST request with JSON and appends rows — acting as a lightweight backend endpoint the artifact can call directly
+- OR any other approach that works from a sandboxed React environment with no stored credentials
+
+---
+
+### The Apps Script approach (what I think will work)
+Deploy a Google Apps Script as a Web App from the sheet with `doPost(e)` that:
+- Accepts a JSON array of job objects
+- Appends them as rows to the sheet
+- Is deployed to run as the sheet owner (no OAuth needed from the client side)
+- Returns CORS headers so the artifact can call it
+
+The artifact would then just do a `fetch('https://script.google.com/macros/s/SCRIPT_ID/exec', { method: 'POST', body: JSON.stringify(jobs) })` and the rows appear in the sheet.
+
+**Please provide the full Apps Script code and deployment steps.**
+
+---
+
+Once Gemini gives you the Apps Script Web App URL, come back and I'll plug it directly into the job agent — that one fetch call is all we need! 🎯
